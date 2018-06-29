@@ -1,17 +1,33 @@
-- Feature Name: (fill me in with a unique ident, my_awesome_feature)
-- Start Date: (fill me in with today's date, YYYY-MM-DD)
+- Feature Name: explicit_flush
+- Start Date: 2018-06-29
 - RFC PR: (leave this empty)
 - Rust Issue: (leave this empty)
 
 # Summary
-[summary]: #summary
+[summary]: `#[explicit_flush]` annotation to mark functions to be explicitly called before destructor
 
-One paragraph explanation of the feature.
+Object functions can be annotated with `#[explicit_flush]`. When a function is annotated,
+user is advisable to explicitly call than function prior to destroying the object.
 
 # Motivation
 [motivation]: #motivation
 
-Why are we doing this? What use cases does it support? What is the expected outcome?
+There's no reliable way to handle errors in destructors.
+
+Suppose you have a buffered writer object. User called `write` function,
+some data is buffered inside the object, and this object is not flushed.
+
+Then object is destroyed. Most users either:
+* forgot to explicitly call `flush`
+* simply assume that data will be properly flushed in destructor
+
+Here comes a problem, what to do in destructor:
+
+* if destructor simply release resources, but doesn't flush data, it leads to bugs
+  (e. g. sometimes data remain unwritten, and these bugs are hard to spot)
+* if destructor flushes data, but ignores error, there's a chance of data loss
+  (user assumes data is written, but it is not written, because)
+
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
@@ -29,6 +45,23 @@ For implementation-oriented RFCs (e.g. for compiler internals), this section sho
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
 
+Language gets another method-level annotation `#[explicit_flush]`.
+
+Rust language gets built-in lint which fires if a normal program flow leading to destructor
+doesn't have a last call to a flushing functions.
+
+Example
+
+```
+{
+    let my_write = ...
+    my_write.write("hello");
+    my_write.flush()
+}
+```
+
+TODO: explain ? return.
+
 This is the technical portion of the RFC. Explain the design in sufficient detail that:
 
 - Its interaction with other features is clear.
@@ -41,6 +74,11 @@ The section should return to the examples given in the previous section, and exp
 [drawbacks]: #drawbacks
 
 Why should we *not* do this?
+
+* Yet another complication of the language.
+* Write failures are practically rare, for the most use cases it's enough
+  to simply terminate or ignore error in destructor, and data-sensitive program developers
+  (like databases) developers can just remember to flush data explicitly.
 
 # Rationale and alternatives
 [alternatives]: #alternatives
